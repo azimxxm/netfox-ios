@@ -27,7 +27,6 @@ class NFXListController_iOS: NFXListController, UITableViewDelegate, UITableView
         
         edgesForExtendedLayout = UIRectEdge.all
         extendedLayoutIncludesOpaqueBars = true
-        automaticallyAdjustsScrollViewInsets = false
         tableView.frame = self.view.frame
         tableView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         tableView.translatesAutoresizingMaskIntoConstraints = true
@@ -52,7 +51,6 @@ class NFXListController_iOS: NFXListController, UITableViewDelegate, UITableView
         searchController.searchResultsUpdater = self
         searchController.delegate = self
         searchController.hidesNavigationBarDuringPresentation = false
-        searchController.dimsBackgroundDuringPresentation = false
         searchController.searchBar.autoresizingMask = [.flexibleWidth]
         searchController.searchBar.backgroundColor = UIColor.clear
         searchController.searchBar.barTintColor = UIColor.NFXOrangeColor()

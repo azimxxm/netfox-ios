@@ -11,7 +11,7 @@ class NFXSettingsController: NFXGenericController {
     // MARK: Properties
 
     let nfxVersionString = "netfox - \(nfxVersion)"
-    var nfxURL = "https://github.com/kasketis/netfox"
+    var nfxURL = "https://github.com/azimxxm/netfox-ios"
     
     var tableData = [HTTPModelShortType]()
     var filters = NFXHTTPModelManager.shared.filters

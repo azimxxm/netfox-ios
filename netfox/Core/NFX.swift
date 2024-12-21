@@ -13,7 +13,7 @@ import UIKit
 #endif
 
 private func podPlistVersion() -> String? {
-    guard let path = Bundle(identifier: "com.kasketis.netfox-iOS")?.infoDictionary?["CFBundleShortVersionString"] as? String else { return nil }
+    guard let path = Bundle(identifier: "uz.azimjondevuz.netfox-ios")?.infoDictionary?["CFBundleShortVersionString"] as? String else { return nil }
     return path
 }
 
@@ -104,7 +104,7 @@ open class NFX: NSObject {
     }
     
     fileprivate func showMessage(_ msg: String) {
-        print("netfox \(nfxVersion) - [https://github.com/kasketis/netfox]: \(msg)")
+        print("netfox \(nfxVersion) - [https://github.com/azimxxm/netfox-ios]: \(msg)")
     }
     
     internal func isEnabled() -> Bool {

@@ -27,7 +27,6 @@ class NFXSettingsController_iOS: NFXSettingsController, UITableViewDelegate, UIT
         
         edgesForExtendedLayout = UIRectEdge()
         extendedLayoutIncludesOpaqueBars = false
-        automaticallyAdjustsScrollViewInsets = false
         
         navigationItem.rightBarButtonItems = [UIBarButtonItem(image: UIImage.NFXStatistics(), style: .plain, target: self, action: #selector(NFXSettingsController_iOS.statisticsButtonPressed)), UIBarButtonItem(image: UIImage.NFXInfo(), style: .plain, target: self, action: #selector(NFXSettingsController_iOS.infoButtonPressed))]
         
@@ -71,7 +70,7 @@ class NFXSettingsController_iOS: NFXSettingsController, UITableViewDelegate, UIT
     }
     
     @objc func nfxURLButtonPressed() {
-        UIApplication.shared.openURL(URL(string: nfxURL)!)
+        UIApplication.shared.open(URL(string: nfxURL)!)
     }
     
     @objc func infoButtonPressed() {
