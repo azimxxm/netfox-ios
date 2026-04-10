@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import os.log
+import os
 
 @objc
 open class NFXProtocol: URLProtocol {
@@ -167,6 +167,7 @@ extension NFXProtocol: URLSessionDataDelegate {
 
     // MARK: - D4: Console Logging
 
+    @available(iOS 14.0, macOS 11.0, *)
     private static let nfxLogger = Logger(subsystem: "netfox", category: "network")
 
     private static func logToConsoleIfNeeded(model: NFXHTTPModel) {
@@ -183,15 +184,19 @@ extension NFXProtocol: URLSessionDataDelegate {
 
         let message = "[NFX] \(method) \(status) \(url) (\(duration))"
 
-        switch status {
-        case 200..<300:
-            nfxLogger.info("\(message, privacy: .public)")
-        case 400..<500:
-            nfxLogger.warning("\(message, privacy: .public)")
-        case 500..<600:
-            nfxLogger.error("\(message, privacy: .public)")
-        default:
-            nfxLogger.info("\(message, privacy: .public)")
+        if #available(iOS 14.0, macOS 11.0, *) {
+            switch status {
+            case 200..<300:
+                nfxLogger.info("\(message, privacy: .public)")
+            case 400..<500:
+                nfxLogger.warning("\(message, privacy: .public)")
+            case 500..<600:
+                nfxLogger.error("\(message, privacy: .public)")
+            default:
+                nfxLogger.info("\(message, privacy: .public)")
+            }
+        } else {
+            NSLog("%@", message)
         }
     }
 

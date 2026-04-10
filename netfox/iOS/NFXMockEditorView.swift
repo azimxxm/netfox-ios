@@ -52,8 +52,8 @@ struct NFXMockEditorView: View {
                 Section(header: Text("URL Pattern")) {
                     TextField("URL pattern to match", text: $urlPattern)
                         .font(.system(size: 13, design: .monospaced))
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
 
                 Section(header: Text("Status Code")) {

@@ -16,83 +16,123 @@ import Security
 struct NFXCertificateInfo {
     let subject: String
     let issuer: String
-    let expiryDate: Date?
+    let expiryDate: String
     let publicKeyAlgorithm: String
     let isSelfSigned: Bool
+    let chainLength: Int
 
     init(from serverTrust: SecTrust) {
         let certCount = SecTrustGetCertificateCount(serverTrust)
 
-        guard certCount > 0,
-              let certChain = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate],
-              let leafCert = certChain.first else {
+        // Build cert chain using iOS 15-compatible API
+        var chain = [SecCertificate]()
+        for i in 0..<certCount {
+            if let cert = SecTrustGetCertificateAtIndex(serverTrust, i) {
+                chain.append(cert)
+            }
+        }
+
+        guard let leafCert = chain.first else {
             self.subject = "Unknown"
             self.issuer = "Unknown"
-            self.expiryDate = nil
+            self.expiryDate = "Unknown"
             self.publicKeyAlgorithm = "Unknown"
             self.isSelfSigned = false
+            self.chainLength = 0
             return
         }
 
+        self.chainLength = certCount
+
+        // Subject from leaf certificate
         let summary = SecCertificateCopySubjectSummary(leafCert) as String? ?? "Unknown"
         self.subject = summary
 
-        // Extract details from certificate values
-        var issuerName = "Unknown"
-        var expiry: Date?
-        var keyAlgorithm = "Unknown"
-
-        if let certValues = SecCertificateCopyValues(leafCert, nil, nil) as? [String: Any] {
-            // Issuer name
-            if let issuerDict = certValues["2.16.840.1.113741.2.1.1.1.5"] as? [String: Any],
-               let issuerValue = issuerDict[kSecPropertyKeyValue as String] {
-                issuerName = "\(issuerValue)"
-            } else if let issuerDict = certValues["2.5.4.3"] as? [String: Any],
-                      let issuerValue = issuerDict[kSecPropertyKeyValue as String] {
-                issuerName = "\(issuerValue)"
-            }
+        // Issuer from second cert in chain (the CA that signed the leaf)
+        if chain.count > 1 {
+            let issuerCert = chain[1]
+            self.issuer = SecCertificateCopySubjectSummary(issuerCert) as String? ?? "Unknown"
+        } else {
+            self.issuer = summary // self-signed
         }
 
-        // Use OID-based approach for dates and key info
-        if let dict = SecCertificateCopyValues(leafCert, [
-            kSecOIDX509V1ValidityNotAfter,
-            kSecOIDX509V1IssuerName,
-            kSecOIDX509V1SubjectPublicKeyAlgorithm
-        ] as CFArray, nil) as? [String: [String: Any]] {
+        // Public key info
+        if let publicKey = SecCertificateCopyKey(leafCert) {
+            let keyAttrs = SecKeyCopyAttributes(publicKey) as? [String: Any]
+            let keyType = keyAttrs?[kSecAttrKeyType as String] as? String ?? ""
+            let keySize = keyAttrs?[kSecAttrKeySizeInBits as String] as? Int ?? 0
 
-            // Expiry date
-            if let expirySection = dict[kSecOIDX509V1ValidityNotAfter as String],
-               let expiryNumber = expirySection[kSecPropertyKeyValue as String] as? NSNumber {
-                // CoreFoundation absolute time (seconds since Jan 1, 2001)
-                expiry = Date(timeIntervalSinceReferenceDate: expiryNumber.doubleValue)
+            let algorithm: String
+            if keyType.contains("RSA") || keyType == (kSecAttrKeyTypeRSA as String) {
+                algorithm = "RSA \(keySize)-bit"
+            } else if keyType.contains("EC") || keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) {
+                algorithm = "ECDSA \(keySize)-bit"
+            } else if keySize > 0 {
+                algorithm = "\(keySize)-bit"
+            } else {
+                algorithm = "Unknown"
             }
+            self.publicKeyAlgorithm = algorithm
+        } else {
+            self.publicKeyAlgorithm = "Unknown"
+        }
 
-            // Issuer
-            if let issuerSection = dict[kSecOIDX509V1IssuerName as String],
-               let issuerEntries = issuerSection[kSecPropertyKeyValue as String] as? [[String: Any]] {
-                for entry in issuerEntries {
-                    if let label = entry[kSecPropertyKeyLabel as String] as? String,
-                       label == "2.5.4.3",
-                       let value = entry[kSecPropertyKeyValue as String] as? String {
-                        issuerName = value
-                        break
+        // Expiry: parse from DER data (best effort)
+        // iOS doesn't expose cert dates directly — use the certificate's DER data
+        let derData = SecCertificateCopyData(leafCert) as Data
+        self.expiryDate = NFXCertificateInfo.parseExpiryFromDER(derData) ?? "N/A"
+
+        // Self-signed: only one cert in chain
+        self.isSelfSigned = (certCount == 1)
+    }
+
+    // Best-effort expiry date extraction from X.509 DER-encoded certificate
+    // Looks for the ASN.1 UTCTime or GeneralizedTime pattern
+    private static func parseExpiryFromDER(_ data: Data) -> String? {
+        let bytes = [UInt8](data)
+        // Find the second time value in the TBS certificate (validity: notBefore, notAfter)
+        var timeCount = 0
+        var i = 0
+        while i < bytes.count - 2 {
+            // UTCTime tag = 0x17, GeneralizedTime tag = 0x18
+            if bytes[i] == 0x17 || bytes[i] == 0x18 {
+                let isUTC = bytes[i] == 0x17
+                let length = Int(bytes[i + 1])
+                if length > 0 && i + 2 + length <= bytes.count {
+                    timeCount += 1
+                    if timeCount == 2 { // second time = notAfter
+                        let timeData = Data(bytes[(i + 2)..<(i + 2 + length)])
+                        if let timeString = String(data: timeData, encoding: .ascii) {
+                            return formatCertDate(timeString, isUTC: isUTC)
+                        }
                     }
                 }
             }
-
-            // Public key algorithm
-            if let keySection = dict[kSecOIDX509V1SubjectPublicKeyAlgorithm as String],
-               let keyValue = keySection[kSecPropertyKeyValue as String] as? String {
-                keyAlgorithm = keyValue
-            }
+            i += 1
         }
+        return nil
+    }
 
-        self.issuer = issuerName
-        self.expiryDate = expiry
-        self.publicKeyAlgorithm = keyAlgorithm
+    private static func formatCertDate(_ raw: String, isUTC: Bool) -> String? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
 
-        // Self-signed: only one cert in chain, or issuer matches subject
-        self.isSelfSigned = (certCount == 1) || (issuerName == summary)
+        if isUTC {
+            // UTCTime: YYMMDDHHMMSSZ
+            formatter.dateFormat = "yyMMddHHmmss'Z'"
+        } else {
+            // GeneralizedTime: YYYYMMDDHHMMSSZ
+            formatter.dateFormat = "yyyyMMddHHmmss'Z'"
+        }
+        formatter.timeZone = TimeZone(identifier: "UTC")
+
+        if let date = formatter.date(from: raw) {
+            let display = DateFormatter()
+            display.dateStyle = .medium
+            display.timeStyle = .short
+            return display.string(from: date)
+        }
+        return raw
     }
 }
 

@@ -22,11 +22,9 @@ struct NFXCertificateView: View {
                 certRow(label: "Subject", value: certInfo.subject)
                 certRow(label: "Issuer", value: certInfo.issuer)
 
-                if let expiry = certInfo.expiryDate {
-                    certRow(label: "Expires", value: formattedDate(expiry))
-                }
-
+                certRow(label: "Expires", value: certInfo.expiryDate)
                 certRow(label: "Key Algorithm", value: certInfo.publicKeyAlgorithm)
+                certRow(label: "Chain Length", value: "\(certInfo.chainLength)")
 
                 HStack {
                     Text("Self-Signed")
@@ -62,12 +60,6 @@ struct NFXCertificateView: View {
         }
     }
 
-    private func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
 }
 
 #endif
