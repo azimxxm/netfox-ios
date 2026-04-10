@@ -36,6 +36,13 @@ class NFXGenericController: NFXViewController {
         let tempMutableString = NSMutableAttributedString(string: string)
         let stringCount = string.count
 
+        // Default text color for the entire string (dynamic for dark mode)
+        tempMutableString.addAttribute(
+            .foregroundColor,
+            value: NFXColor.NFXBlackColor(),
+            range: NSRange(location: 0, length: stringCount)
+        )
+
         // Bold + orange for section headers
         if let regexBodyHeaders = try? NSRegularExpression(
             pattern: "(\\-- Body \\--)|(\\-- Headers \\--)",

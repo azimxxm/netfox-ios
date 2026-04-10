@@ -134,6 +134,7 @@ class NFXDetailsController_iOS: NFXDetailsController, MFMailComposeViewControlle
         textView.font = .NFXFont(size: 13)
         textView.textColor = .NFXSecondaryTextColor()
         textView.isEditable = false
+        textView.isScrollEnabled = false  // Required: lets Auto Layout size the textView by content
         textView.attributedText = content
         textView.isUserInteractionEnabled = true
         textView.dataDetectorTypes = []

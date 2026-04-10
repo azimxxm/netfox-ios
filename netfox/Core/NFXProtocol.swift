@@ -12,7 +12,11 @@ open class NFXProtocol: URLProtocol {
     static let nfxInternalKey = "com.netfox.NFXInternal"
 
     private lazy var session: URLSession = {
-        return URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        // Mark config as internal so the protocolClasses getter swizzle skips NFXProtocol injection
+        let config = URLSessionConfiguration.default
+        URLSessionConfiguration.markAsNFXInternal(config)
+        config.protocolClasses = config.protocolClasses?.filter { $0 != NFXProtocol.self }
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
 
     private let model = NFXHTTPModel()
@@ -30,7 +34,8 @@ open class NFXProtocol: URLProtocol {
             }
         }
 
-        guard let request = task.currentRequest else { return false }
+        // iOS 15+ sometimes passes nil currentRequest in canInit — fall back to originalRequest
+        guard let request = task.currentRequest ?? task.originalRequest else { return false }
         return canServeRequest(request)
     }
 

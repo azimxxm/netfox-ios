@@ -83,8 +83,10 @@ open class NFX: NSObject {
         }
 
         started = true
-        URLSessionConfiguration.implementNetfox()
+        // Register first — catches URLSession.shared immediately
         register()
+        // Swizzle configuration getters — catches future URLSession instances
+        URLSessionConfiguration.implementNetfox()
         enable()
         fileStorageInit()
         showMessage(Constants.startedMessage.rawValue)
