@@ -69,45 +69,9 @@ open class NFXProtocol: URLProtocol {
     override open func startLoading() {
         model.saveRequest(request)
 
-        // C2: Check for mock rule before making the real request
-        if let urlString = request.url?.absoluteString,
-           let mockRule = NFXHTTPModelManager.shared.findMockRule(for: urlString) {
-            serveMockResponse(for: urlString, rule: mockRule)
-            return
-        }
-
         let mutableRequest = (request as NSURLRequest).mutableCopy() as! NSMutableURLRequest
         URLProtocol.setProperty(true, forKey: NFXProtocol.nfxInternalKey, in: mutableRequest)
         session.dataTask(with: mutableRequest as URLRequest).resume()
-    }
-
-    /// C2: Return a mock response instead of making the real network call
-    private func serveMockResponse(for urlString: String, rule: NFXMockRule) {
-        let bodyData = rule.responseBody.data(using: .utf8) ?? Data()
-
-        // Build mock HTTP headers
-        var headers = rule.responseHeaders
-        headers["Content-Length"] = "\(bodyData.count)"
-
-        guard let url = request.url,
-              let mockResponse = HTTPURLResponse(
-                  url: url,
-                  statusCode: rule.statusCode,
-                  httpVersion: "HTTP/1.1",
-                  headerFields: headers
-              ) else {
-            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
-            return
-        }
-
-        // Deliver mock response to the client
-        client?.urlProtocol(self, didReceive: mockResponse, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: bodyData)
-        client?.urlProtocolDidFinishLoading(self)
-
-        // Save the mock response to the model for display in the list
-        model.saveResponse(mockResponse, data: bodyData)
-        NFXHTTPModelManager.shared.add(model)
     }
 
     override open func stopLoading() {

@@ -29,8 +29,6 @@ struct NFXRequestDetailView: View {
     // B6: Diff
     @State private var showDiffPicker = false
 
-    // C2: Mock editor
-    @State private var showMockEditor = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -94,16 +92,6 @@ struct NFXRequestDetailView: View {
                     }
                     .disabled(isReplaying)
 
-                    // C2: Mock button (only when mocking is enabled)
-                    if manager.isMockingEnabled {
-                        Divider()
-                        Button {
-                            showMockEditor = true
-                        } label: {
-                            Label("Mock Response", systemImage: "wand.and.stars")
-                        }
-                    }
-
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
@@ -114,9 +102,6 @@ struct NFXRequestDetailView: View {
         }
         .sheet(isPresented: $showDiffPicker) {
             NFXDiffPickerSheet(sourceModel: model)
-        }
-        .sheet(isPresented: $showMockEditor) {
-            NFXMockEditorView(model: model)
         }
         .background(
             NavigationLink(

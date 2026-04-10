@@ -38,7 +38,6 @@ struct NFXWebSocketMessage: Identifiable {
 
 // MARK: - WebSocket Logger
 
-@MainActor
 final class NFXWebSocketLogger: ObservableObject {
     static let shared = NFXWebSocketLogger()
 

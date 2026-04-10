@@ -62,9 +62,6 @@ struct NFXSettingsView: View {
                 Toggle("Group by Host", isOn: $manager.isGroupingEnabled)
                     .tint(Color(UIColor.NFXOrangeColor()))
 
-                Toggle("Response Mocking", isOn: $manager.isMockingEnabled)
-                    .tint(Color(UIColor.NFXOrangeColor()))
-
                 Toggle("Console Logging", isOn: $manager.isConsoleLoggingEnabled)
                     .tint(Color(UIColor.NFXOrangeColor()))
 

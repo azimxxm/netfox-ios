@@ -44,9 +44,6 @@ final class NFXHTTPModelManager: NSObject, ObservableObject {
     /// C1: Group requests by URL host in the list
     @Published var isGroupingEnabled = false
 
-    /// C2: Enable response mocking
-    @Published var isMockingEnabled = false
-
     /// D4: Log intercepted requests to os.Logger
     @Published var isConsoleLoggingEnabled = false
 
@@ -58,11 +55,6 @@ final class NFXHTTPModelManager: NSObject, ObservableObject {
 
     /// E4: iPad two-column split view layout
     @Published var isIPadSplitEnabled = true
-
-    // MARK: - Mock Rules (C2)
-
-    /// In-memory mock rules keyed by URL pattern
-    @Published var mockRules = [String: NFXMockRule]()
 
     /// Not thread safe. Use only from main thread/queue
     var filteredModels: [NFXHTTPModel] {
@@ -118,19 +110,6 @@ final class NFXHTTPModelManager: NSObject, ObservableObject {
         return pinnedHashes.contains(model.randomHash)
     }
 
-    // MARK: - Mock Rule Lookup (C2)
-
-    /// Returns a matching mock rule for a given URL, if mocking is enabled
-    func findMockRule(for url: String) -> NFXMockRule? {
-        guard isMockingEnabled else { return nil }
-        for (pattern, rule) in mockRules where rule.isEnabled {
-            if url.contains(pattern) {
-                return rule
-            }
-        }
-        return nil
-    }
-
     private func getCachedFilterTypes() -> [HTTPModelShortType] {
         return filters
             .enumerated()
@@ -143,15 +122,6 @@ final class NFXHTTPModelManager: NSObject, ObservableObject {
         }
     }
 
-}
-
-// MARK: - Mock Rule Model (C2)
-
-struct NFXMockRule {
-    var statusCode: Int = 200
-    var responseBody: String = ""
-    var responseHeaders: [String: String] = ["Content-Type": "application/json"]
-    var isEnabled: Bool = true
 }
 
 // MARK: - Status Code Filter (B1)
