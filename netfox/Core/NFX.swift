@@ -13,27 +13,33 @@ import UIKit
 #endif
 
 private func podPlistVersion() -> String? {
-    guard let path = Bundle(identifier: "uz.azimjondevuz.netfox-ios")?.infoDictionary?["CFBundleShortVersionString"] as? String else { return nil }
-    return path
+    guard let version = Bundle(identifier: "uz.azimjondevuz.netfox-ios")?.infoDictionary?["CFBundleShortVersionString"] as? String else {
+        return nil
+    }
+    return version
 }
 
-// TODO: Carthage support
 let nfxVersion = podPlistVersion() ?? "0"
 
 @objc
 open class NFX: NSObject {
-    
+
     // MARK: - Properties
+
     #if os(OSX)
-        var windowController: NFXWindowController?
-        let mainMenu: NSMenu? = NSApp.mainMenu?.items[1].submenu
-        var nfxMenuItem: NSMenuItem = NSMenuItem(title: "netfox", action: #selector(NFX.show), keyEquivalent: String.init(describing: (character: NSF9FunctionKey, length: 1)))
+    var windowController: NSWindowController?
+    let mainMenu: NSMenu? = NSApp.mainMenu?.items[1].submenu
+    var nfxMenuItem: NSMenuItem = NSMenuItem(
+        title: "netfox",
+        action: #selector(NFX.show),
+        keyEquivalent: String(describing: (character: NSF9FunctionKey, length: 1))
+    )
     #endif
-    
+
     #if os(iOS)
-        fileprivate var navigationViewController: UINavigationController?
+    fileprivate var navigationViewController: UINavigationController?
     #endif
-    
+
     fileprivate enum Constants: String {
         case alreadyStartedMessage = "Already started!"
         case alreadyStoppedMessage = "Already stopped!"
@@ -41,7 +47,7 @@ open class NFX: NSObject {
         case stoppedMessage = "Stopped!"
         case nibName = "NetfoxWindow"
     }
-    
+
     fileprivate var started: Bool = false
     fileprivate var presented: Bool = false
     fileprivate var enabled: Bool = false
@@ -49,9 +55,9 @@ open class NFX: NSObject {
     fileprivate var ignoredURLs = [String]()
     fileprivate var ignoredURLsRegex = [NSRegularExpression]()
     fileprivate var lastVisitDate: Date = Date()
-    
+
     internal var cacheStoragePolicy = URLCache.StoragePolicy.notAllowed
-    
+
     // swiftSharedInstance is not accessible from ObjC
     class var swiftSharedInstance: NFX {
         struct Singleton {
@@ -59,12 +65,12 @@ open class NFX: NSObject {
         }
         return Singleton.instance
     }
-    
+
     // the sharedInstance class method can be reached from ObjC
     @objc open class func sharedInstance() -> NFX {
         return NFX.swiftSharedInstance
     }
-    
+
     @objc public enum ENFXGesture: Int {
         case shake
         case custom
@@ -86,13 +92,13 @@ open class NFX: NSObject {
         addNetfoxToMainMenu()
         #endif
     }
-    
+
     @objc open func stop() {
         guard started else {
             showMessage(Constants.alreadyStoppedMessage.rawValue)
             return
         }
-        
+
         unregister()
         disable()
         clearOldData()
@@ -102,44 +108,44 @@ open class NFX: NSObject {
         removeNetfoxFromMainmenu()
         #endif
     }
-    
+
     fileprivate func showMessage(_ msg: String) {
         print("netfox \(nfxVersion) - [https://github.com/azimxxm/netfox-ios]: \(msg)")
     }
-    
+
     internal func isEnabled() -> Bool {
         return enabled
     }
-    
+
     internal func enable() {
         enabled = true
     }
-    
+
     internal func disable() {
         enabled = false
     }
-    
+
     fileprivate func register() {
         URLProtocol.registerClass(NFXProtocol.self)
     }
-    
+
     fileprivate func unregister() {
         URLProtocol.unregisterClass(NFXProtocol.self)
     }
-    
+
     @objc func motionDetected() {
         guard started else { return }
         toggleNFX()
     }
-    
+
     @objc open func isStarted() -> Bool {
         return started
     }
-    
+
     @objc open func setCachePolicy(_ policy: URLCache.StoragePolicy) {
         cacheStoragePolicy = policy
     }
-    
+
     @objc open func setGesture(_ gesture: ENFXGesture) {
         selectedGesture = gesture
         #if os(OSX)
@@ -150,150 +156,135 @@ open class NFX: NSObject {
         }
         #endif
     }
-    
+
     @objc open func show() {
         guard started else { return }
         showNFX()
     }
-    
+
     #if os(iOS)
     @objc open func show(on rootViewController: UIViewController) {
-        guard started, presented == false else { return }
-
+        guard started, !presented else { return }
         showNFX(on: rootViewController)
         presented = true
     }
     #endif
-    
+
     @objc open func hide() {
         guard started else { return }
         hideNFX()
     }
 
-    @objc open func toggle()
-    {
-        guard self.started else { return }
+    @objc open func toggle() {
+        guard started else { return }
         toggleNFX()
     }
-    
+
     @objc open func ignoreURL(_ url: String) {
         ignoredURLs.append(url)
     }
-    
+
     @objc open func getSessionLog() -> Data? {
         return try? Data(contentsOf: NFXPath.sessionLogURL)
     }
-    
+
     @objc open func ignoreURLs(_ urls: [String]) {
         ignoredURLs.append(contentsOf: urls)
     }
-    
+
     @objc open func ignoreURLsWithRegex(_ regex: String) {
         ignoredURLsRegex.append(NSRegularExpression(regex))
     }
-    
+
     @objc open func ignoreURLsWithRegexes(_ regexes: [String]) {
         ignoredURLsRegex.append(contentsOf: regexes.map { NSRegularExpression($0) })
     }
-    
+
     internal func getLastVisitDate() -> Date {
         return lastVisitDate
     }
-    
+
     fileprivate func showNFX() {
-        if presented {
-            return
-        }
-        
+        guard !presented else { return }
         showNFXFollowingPlatform()
         presented = true
     }
-    
+
     fileprivate func hideNFX() {
-        if !presented {
-            return
-        }
-        
-        hideNFXFollowingPlatform { () -> Void in
-            self.presented = false
-            self.lastVisitDate = Date()
+        guard presented else { return }
+        hideNFXFollowingPlatform { [weak self] in
+            self?.presented = false
+            self?.lastVisitDate = Date()
         }
     }
 
     fileprivate func toggleNFX() {
         presented ? hideNFX() : showNFX()
     }
-    
+
     private func fileStorageInit() {
         clearOldData()
         NFXPath.deleteOldNFXLogs()
         NFXPath.createNFXDirIfNotExist()
     }
-    
+
     internal func clearOldData() {
         NFXHTTPModelManager.shared.clear()
-        
         NFXPath.deleteNFXDir()
         NFXPath.createNFXDirIfNotExist()
     }
-    
+
     func getIgnoredURLs() -> [String] {
         return ignoredURLs
     }
-    
+
     func getIgnoredURLsRegexes() -> [NSRegularExpression] {
         return ignoredURLsRegex
     }
-    
+
     func getSelectedGesture() -> ENFXGesture {
         return selectedGesture
     }
-    
 }
+
+// MARK: - iOS Platform
 
 #if os(iOS)
 
 extension NFX {
     fileprivate var presentingViewController: UIViewController? {
         var rootViewController = UIWindow.keyWindow?.rootViewController
-		while let controller = rootViewController?.presentedViewController {
-			rootViewController = controller
-		}
+        while let controller = rootViewController?.presentedViewController {
+            rootViewController = controller
+        }
         return rootViewController
     }
 
     fileprivate func showNFXFollowingPlatform() {
         showNFX(on: presentingViewController)
     }
-    
+
     fileprivate func showNFX(on rootViewController: UIViewController?) {
         let navigationController = UINavigationController(rootViewController: NFXListController_iOS())
         navigationController.navigationBar.isTranslucent = false
         navigationController.navigationBar.tintColor = UIColor.NFXOrangeColor()
-        navigationController.navigationBar.barTintColor = UIColor.NFXStarkWhiteColor()
-        navigationController.navigationBar.titleTextAttributes = [.foregroundColor: UIColor.NFXOrangeColor()]
 
-        if #available(iOS 13.0, *) {
-            let appearence = UINavigationBarAppearance()
-            
-            appearence.configureWithOpaqueBackground()
-            appearence.backgroundColor = UIColor.NFXStarkWhiteColor()
-            appearence.titleTextAttributes = [.foregroundColor: UIColor.black]
-            
-            navigationController.navigationBar.standardAppearance = appearence
-            navigationController.navigationBar.scrollEdgeAppearance = appearence
-            
-            if #available(iOS 15.0, *) {
-                navigationController.navigationBar.compactScrollEdgeAppearance = appearence
-            }
-            
-            navigationController.presentationController?.delegate = self
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.NFXBackgroundColor()
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.NFXPrimaryTextColor()]
+
+        navigationController.navigationBar.standardAppearance = appearance
+        navigationController.navigationBar.scrollEdgeAppearance = appearance
+        if #available(iOS 15.0, *) {
+            navigationController.navigationBar.compactScrollEdgeAppearance = appearance
         }
-        
+        navigationController.presentationController?.delegate = self
+
         rootViewController?.present(navigationController, animated: true, completion: nil)
         navigationViewController = navigationController
     }
-    
+
     fileprivate func hideNFXFollowingPlatform(_ completion: (() -> Void)?) {
         navigationViewController?.presentingViewController?.dismiss(animated: true, completion: completion)
         navigationViewController = nil
@@ -301,56 +292,53 @@ extension NFX {
 }
 
 extension NFX: UIAdaptivePresentationControllerDelegate {
-
-    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController)
-    {
-        guard self.started else { return }
-        self.presented = false
+    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        guard started else { return }
+        presented = false
     }
 }
 
 #elseif os(OSX)
-    
+
 extension NFX {
-    
+
     public func windowDidClose() {
         presented = false
     }
-    
+
     private func setupNetfoxMenuItem() {
         nfxMenuItem.target = self
         nfxMenuItem.action = #selector(NFX.motionDetected)
         nfxMenuItem.keyEquivalent = "n"
-        nfxMenuItem.keyEquivalentModifierMask = NSEvent.ModifierFlags(rawValue: UInt(Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue)))
+        nfxMenuItem.keyEquivalentModifierMask = NSEvent.ModifierFlags(
+            rawValue: UInt(Int(NSEvent.ModifierFlags.command.rawValue | NSEvent.ModifierFlags.shift.rawValue))
+        )
     }
-    
+
     public func addNetfoxToMainMenu() {
         setupNetfoxMenuItem()
         if let menu = mainMenu {
             menu.insertItem(nfxMenuItem, at: 0)
         }
     }
-    
+
     public func removeNetfoxFromMainmenu() {
         if let menu = mainMenu {
             menu.removeItem(nfxMenuItem)
         }
     }
-    
-    public func showNFXFollowingPlatform()  {
+
+    public func showNFXFollowingPlatform() {
         if windowController == nil {
             let nibName = Constants.nibName.rawValue
-
-            windowController = NFXWindowController(windowNibName: nibName)
+            windowController = NSWindowController(windowNibName: nibName)
         }
         windowController?.showWindow(nil)
     }
-    
+
     public func hideNFXFollowingPlatform(completion: (() -> Void)?) {
         windowController?.close()
-        if let notNilCompletion = completion {
-            notNilCompletion()
-        }
+        completion?()
     }
 }
 

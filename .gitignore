@@ -1,0 +1,27 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+*.playground/timeline.xctimeline
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/package.xcworkspace/
+Package.resolved
+
+# OS
+.DS_Store
+*.swp
+*~
+
+# Claude Code / AI
+CLAUDE.md
+.playwright-mcp/
+
+# Logs
+*.log

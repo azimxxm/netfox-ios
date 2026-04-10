@@ -6,17 +6,6 @@
 //
 
 import Foundation
-fileprivate func < <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
-  switch (lhs, rhs) {
-  case let (l?, r?):
-    return l < r
-  case (nil, _?):
-    return true
-  default:
-    return false
-  }
-}
-
 
 @objc public class NFXHTTPModel: NSObject {
     @objc public var requestURL: String?
@@ -38,18 +27,18 @@ fileprivate func < <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
     @objc public var responseTime: String?
     @objc public var responseHeaders: [AnyHashable: Any]?
     public var responseBodyLength: Int?
-    
+
     public var timeInterval: Float?
-    
+
     @objc public lazy var randomHash = UUID().uuidString
     public var shortType = HTTPModelShortType.OTHER
     @objc public var shortTypeString: String { return shortType.rawValue }
-    
+
     @objc public var noResponse = true
-    
+
     func saveRequest(_ request: URLRequest) {
         requestDate = Date()
-        requestTime = getTimeFromDate(requestDate!)
+        requestTime = getTimeFromDate(requestDate)
         requestURL = request.getNFXURL()
         requestURLComponents = request.getNFXURLComponents()
         requestURLQueryItems = request.getNFXURLComponents()?.queryItems
@@ -57,77 +46,73 @@ fileprivate func < <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
         requestCachePolicy = request.getNFXCachePolicy()
         requestTimeout = request.getNFXTimeout()
         requestHeaders = request.getNFXHeaders()
-        requestType = requestHeaders?["Content-Type"] as! String?
+        requestType = requestHeaders?["Content-Type"] as? String
         requestCurl = request.getCurl()
     }
-    
+
     func saveRequestBody(_ request: URLRequest) {
         saveRequestBodyData(request.getNFXBody())
     }
-    
+
     func logRequest(_ request: URLRequest) {
         formattedRequestLogEntry().appendToFileURL(NFXPath.sessionLogURL)
     }
-    
+
     func saveErrorResponse() {
         responseDate = Date()
     }
-    
+
     func saveResponse(_ response: URLResponse, data: Data) {
         noResponse = false
         responseDate = Date()
-        responseTime = getTimeFromDate(responseDate!)
+        responseTime = getTimeFromDate(responseDate)
         responseStatus = response.getNFXStatus()
         responseHeaders = response.getNFXHeaders()
-        
+
         let headers = response.getNFXHeaders()
-        
+
         if let contentType = headers["Content-Type"] as? String {
             let responseType = contentType.components(separatedBy: ";")[0]
             shortType = HTTPModelShortType(contentType: responseType)
             self.responseType = responseType
         }
-        
-        timeInterval = Float(responseDate!.timeIntervalSince(requestDate!))
-        
+
+        if let reqDate = requestDate, let resDate = responseDate {
+            timeInterval = Float(resDate.timeIntervalSince(reqDate))
+        }
+
         saveResponseBodyData(data)
         formattedResponseLogEntry().appendToFileURL(NFXPath.sessionLogURL)
     }
-    
+
     func saveRequestBodyData(_ data: Data) {
-        let tempBodyString = String.init(data: data, encoding: String.Encoding.utf8)
-        self.requestBodyLength = data.count
-        if (tempBodyString != nil) {
-            saveData(tempBodyString!, to: getRequestBodyFileURL())
+        if let tempBodyString = String(data: data, encoding: .utf8) {
+            requestBodyLength = data.count
+            saveData(tempBodyString, to: getRequestBodyFileURL())
         }
     }
-    
+
     func saveResponseBodyData(_ data: Data) {
         var bodyString: String?
-        
+
         if shortType == .IMAGE {
             bodyString = data.base64EncodedString(options: .endLineWithLineFeed)
-
         } else {
-            if let tempBodyString = String(data: data, encoding: String.Encoding.utf8) {
-                bodyString = tempBodyString
-            }
+            bodyString = String(data: data, encoding: .utf8)
         }
-        
+
         if let bodyString = bodyString {
             responseBodyLength = data.count
             saveData(bodyString, to: getResponseBodyFileURL())
         }
-        
     }
-    
+
     fileprivate func prettyOutput(_ rawData: Data, contentType: String? = nil) -> String {
         guard let contentType = contentType,
               let output = prettyPrint(rawData, type: .init(contentType: contentType))
         else {
-            return String(data: rawData, encoding: String.Encoding.utf8) ?? ""
+            return String(data: rawData, encoding: .utf8) ?? ""
         }
-        
         return output
     }
 
@@ -137,68 +122,63 @@ fileprivate func < <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
         }
         return prettyOutput(data, contentType: requestType)
     }
-    
+
     @objc public func getResponseBody() -> String {
         guard let data = readRawData(from: getResponseBodyFileURL()) else {
             return ""
         }
-        
         return prettyOutput(data, contentType: responseType)
     }
-    
+
     @objc public func getRequestBodyFileURL() -> URL {
         return NFXPath.pathURLToFile(getRequestBodyFilename())
     }
-    
+
     @objc public func getRequestBodyFilename() -> String {
-        return "request_body_\(requestTime!)_\(randomHash)"
+        let time = requestTime ?? "unknown"
+        return "request_body_\(time)_\(randomHash)"
     }
-    
+
     @objc public func getResponseBodyFileURL() -> URL {
         return NFXPath.pathURLToFile(getResponseBodyFilename())
     }
-    
+
     @objc public func getResponseBodyFilename() -> String {
-        return "response_body_\(requestTime!)_\(randomHash)"
+        let time = requestTime ?? "unknown"
+        return "response_body_\(time)_\(randomHash)"
     }
-    
+
     @objc public func saveData(_ dataString: String, to fileURL: URL) {
         do {
             try dataString.write(to: fileURL, atomically: true, encoding: .utf8)
-        } catch let error {
+        } catch {
             print("[NFX]: Failed to save data to [\(fileURL)] - \(error.localizedDescription)")
         }
     }
-    
+
     @objc public func readRawData(from fileURL: URL) -> Data? {
         do {
             return try Data(contentsOf: fileURL)
-        } catch let error {
+        } catch {
             print("[NFX]: Failed to load data from [\(fileURL)] - \(error.localizedDescription)")
             return nil
         }
     }
-    
-    @objc public func getTimeFromDate(_ date: Date) -> String? {
-        let calendar = Calendar.current
-        let components = (calendar as NSCalendar).components([.hour, .minute], from: date)
-        guard let hour = components.hour, let minutes = components.minute else {
-            return nil
-        }
-        if minutes < 10 {
-            return "\(hour):0\(minutes)"
-        } else {
-            return "\(hour):\(minutes)"
-        }
+
+    @objc public func getTimeFromDate(_ date: Date?) -> String? {
+        guard let date = date else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
     }
-    
+
     public func prettyPrint(_ rawData: Data, type: HTTPModelShortType) -> String? {
         switch type {
         case .JSON:
             do {
                 let rawJsonData = try JSONSerialization.jsonObject(with: rawData, options: [])
                 let prettyPrintedString = try JSONSerialization.data(withJSONObject: rawJsonData, options: [.prettyPrinted])
-                return String(data: prettyPrintedString, encoding: String.Encoding.utf8)
+                return String(data: prettyPrintedString, encoding: .utf8)
             } catch {
                 return nil
             }
@@ -206,89 +186,85 @@ fileprivate func < <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
             return nil
         }
     }
-    
+
     @objc public func isSuccessful() -> Bool {
-        if (self.responseStatus != nil) && (self.responseStatus < 400) {
-            return true
-        } else {
-            return false
-        }
+        guard let status = responseStatus else { return false }
+        return status < 400
     }
-    
-    
+
     @objc public func formattedRequestLogEntry() -> String {
         var log = String()
-        
-        if let requestURL = self.requestURL {
+
+        if let requestURL = requestURL {
             log.append("-------START REQUEST -  \(requestURL) -------\n")
         }
 
-        if let requestMethod = self.requestMethod {
+        if let requestMethod = requestMethod {
             log.append("[Request Method] \(requestMethod)\n")
         }
-        
-        if let requestDate = self.requestDate {
+
+        if let requestDate = requestDate {
             log.append("[Request Date] \(requestDate)\n")
         }
-        
-        if let requestTime = self.requestTime {
+
+        if let requestTime = requestTime {
             log.append("[Request Time] \(requestTime)\n")
         }
-        
-        if let requestType = self.requestType {
+
+        if let requestType = requestType {
             log.append("[Request Type] \(requestType)\n")
         }
-            
-        if let requestTimeout = self.requestTimeout {
+
+        if let requestTimeout = requestTimeout {
             log.append("[Request Timeout] \(requestTimeout)\n")
         }
-            
-        if let requestHeaders = self.requestHeaders {
+
+        if let requestHeaders = requestHeaders {
             log.append("[Request Headers]\n\(requestHeaders)\n")
         }
-        
+
         log.append("[Request Body]\n \(getRequestBody())\n")
-        
-        if let requestURL = self.requestURL {
+
+        if let requestURL = requestURL {
             log.append("-------END REQUEST - \(requestURL) -------\n\n")
         }
-        
-        return log;
+
+        return log
     }
-    
+
     @objc public func formattedResponseLogEntry() -> String {
         var log = String()
-        
-        if let requestURL = self.requestURL {
+
+        if let requestURL = requestURL {
             log.append("-------START RESPONSE -  \(requestURL) -------\n")
         }
-        
-        if let responseStatus = self.responseStatus {
+
+        if let responseStatus = responseStatus {
             log.append("[Response Status] \(responseStatus)\n")
         }
-        
-        if let responseType = self.responseType {
+
+        if let responseType = responseType {
             log.append("[Response Type] \(responseType)\n")
         }
-        
-        if let responseDate = self.responseDate {
+
+        if let responseDate = responseDate {
             log.append("[Response Date] \(responseDate)\n")
         }
-        
-        if let responseTime = self.responseTime {
+
+        if let responseTime = responseTime {
             log.append("[Response Time] \(responseTime)\n")
         }
-        
-        if let responseHeaders = self.responseHeaders {
+
+        if let responseHeaders = responseHeaders {
             log.append("[Response Headers]\n\(responseHeaders)\n\n")
         }
-        
+
         log.append("[Response Body]\n \(getResponseBody())\n")
-        
-        if let requestURL = self.requestURL {
+
+        if let requestURL = requestURL {
             log.append("-------END RESPONSE - \(requestURL) -------\n\n")
         }
-        
-        return log;
+
+        return log
     }
 }
