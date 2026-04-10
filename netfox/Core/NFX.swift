@@ -10,6 +10,7 @@ import Foundation
 import Cocoa
 #else
 import UIKit
+import SwiftUI
 #endif
 
 private func podPlistVersion() -> String? {
@@ -267,20 +268,14 @@ extension NFX {
     }
 
     fileprivate func showNFX(on rootViewController: UIViewController?) {
-        let navigationController = UINavigationController(rootViewController: NFXListController_iOS())
-        navigationController.navigationBar.isTranslucent = false
-        navigationController.navigationBar.tintColor = UIColor.NFXOrangeColor()
+        let listView = NFXRequestListView()
+        let hostingController = UIHostingController(
+            rootView: NavigationView { listView }.navigationViewStyle(.stack)
+        )
+        hostingController.view.tintColor = UIColor.NFXOrangeColor()
 
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor.NFXBackgroundColor()
-        appearance.titleTextAttributes = [.foregroundColor: UIColor.NFXPrimaryTextColor()]
-
-        navigationController.navigationBar.standardAppearance = appearance
-        navigationController.navigationBar.scrollEdgeAppearance = appearance
-        if #available(iOS 15.0, *) {
-            navigationController.navigationBar.compactScrollEdgeAppearance = appearance
-        }
+        let navigationController = UINavigationController(rootViewController: hostingController)
+        navigationController.setNavigationBarHidden(true, animated: false)
         navigationController.presentationController?.delegate = self
 
         rootViewController?.present(navigationController, animated: true, completion: nil)
