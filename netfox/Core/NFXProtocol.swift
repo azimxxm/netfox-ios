@@ -6,13 +6,18 @@
 //
 
 import Foundation
+import os
 
 @objc
 open class NFXProtocol: URLProtocol {
     static let nfxInternalKey = "com.netfox.NFXInternal"
 
     private lazy var session: URLSession = {
-        return URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        // Mark config as internal so the protocolClasses getter swizzle skips NFXProtocol injection
+        let config = URLSessionConfiguration.default
+        URLSessionConfiguration.markAsNFXInternal(config)
+        config.protocolClasses = config.protocolClasses?.filter { $0 != NFXProtocol.self }
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
 
     private let model = NFXHTTPModel()
@@ -30,7 +35,8 @@ open class NFXProtocol: URLProtocol {
             }
         }
 
-        guard let request = task.currentRequest else { return false }
+        // iOS 15+ sometimes passes nil currentRequest in canInit — fall back to originalRequest
+        guard let request = task.currentRequest ?? task.originalRequest else { return false }
         return canServeRequest(request)
     }
 
@@ -117,7 +123,45 @@ extension NFXProtocol: URLSessionDataDelegate {
             model.saveResponse(response, data: data)
         }
 
+        // D4: Console logging
+        NFXProtocol.logToConsoleIfNeeded(model: model)
+
         NFXHTTPModelManager.shared.add(model)
+    }
+
+    // MARK: - D4: Console Logging
+
+    @available(iOS 14.0, macOS 11.0, *)
+    private static let nfxLogger = Logger(subsystem: "netfox", category: "network")
+
+    private static func logToConsoleIfNeeded(model: NFXHTTPModel) {
+        guard NFXHTTPModelManager.shared.isConsoleLoggingEnabled else { return }
+        let method = model.requestMethod ?? "?"
+        let status = model.responseStatus ?? 0
+        let url = model.requestURL ?? "?"
+        let duration: String
+        if let interval = model.timeInterval {
+            duration = String(format: "%.0fms", interval * 1000)
+        } else {
+            duration = "?ms"
+        }
+
+        let message = "[NFX] \(method) \(status) \(url) (\(duration))"
+
+        if #available(iOS 14.0, macOS 11.0, *) {
+            switch status {
+            case 200..<300:
+                nfxLogger.info("\(message, privacy: .public)")
+            case 400..<500:
+                nfxLogger.warning("\(message, privacy: .public)")
+            case 500..<600:
+                nfxLogger.error("\(message, privacy: .public)")
+            default:
+                nfxLogger.info("\(message, privacy: .public)")
+            }
+        } else {
+            NSLog("%@", message)
+        }
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
@@ -136,6 +180,16 @@ extension NFXProtocol: URLSessionDataDelegate {
     }
 
     public func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+
+        // D6: Capture TLS certificate info before forwarding the challenge
+        #if os(iOS)
+        if NFXHTTPModelManager.shared.isCertInfoEnabled,
+           challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let serverTrust = challenge.protectionSpace.serverTrust {
+            model.certificateInfo = NFXCertificateInfo(from: serverTrust)
+        }
+        #endif
+
         let wrappedChallenge = URLAuthenticationChallenge(authenticationChallenge: challenge, sender: NFXAuthenticationChallengeSender(handler: completionHandler))
         client?.urlProtocol(self, didReceive: wrappedChallenge)
     }

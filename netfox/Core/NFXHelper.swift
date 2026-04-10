@@ -568,6 +568,8 @@ extension String {
 
 // MARK: - URLSessionConfiguration Swizzling
 
+private var nfxExemptConfigKey: UInt8 = 0
+
 @objc extension URLSessionConfiguration {
     private static var firstOccurrence = true
 
@@ -576,9 +578,12 @@ extension String {
         firstOccurrence = false
 
         swizzleProtocolSetter()
+        swizzleProtocolGetter()
         swizzleDefault()
         swizzleEphemeral()
     }
+
+    // MARK: - Setter swizzle (de-duplication)
 
     private static func swizzleProtocolSetter() {
         let instance = URLSessionConfiguration.default
@@ -587,9 +592,11 @@ extension String {
         let origSelector = #selector(setter: URLSessionConfiguration.protocolClasses)
         let newSelector = #selector(setter: URLSessionConfiguration.protocolClasses_Swizzled)
 
-        let origMethod = class_getInstanceMethod(aClass, origSelector)!
-        let newMethod = class_getInstanceMethod(aClass, newSelector)!
-
+        guard let origMethod = class_getInstanceMethod(aClass, origSelector),
+              let newMethod = class_getInstanceMethod(aClass, newSelector) else {
+            print("[NFX]: WARNING - Failed to swizzle protocolClasses setter")
+            return
+        }
         method_exchangeImplementations(origMethod, newMethod)
     }
 
@@ -614,15 +621,64 @@ extension String {
         }
     }
 
+    // MARK: - Getter swizzle (always inject NFXProtocol when reading protocolClasses)
+    // This is the nuclear fix: catches ALL sessions regardless of creation timing
+
+    private static func swizzleProtocolGetter() {
+        let instance = URLSessionConfiguration.default
+        let aClass: AnyClass = object_getClass(instance)!
+
+        let origSelector = #selector(getter: URLSessionConfiguration.protocolClasses)
+        let newSelector = #selector(getter: URLSessionConfiguration.nfx_protocolClasses)
+
+        guard let origMethod = class_getInstanceMethod(aClass, origSelector),
+              let newMethod = class_getInstanceMethod(aClass, newSelector) else {
+            print("[NFX]: WARNING - Failed to swizzle protocolClasses getter")
+            return
+        }
+        method_exchangeImplementations(origMethod, newMethod)
+    }
+
+    @objc private var nfx_protocolClasses: [AnyClass]? {
+        // Calls the original getter (methods are swapped)
+        let classes = self.nfx_protocolClasses
+
+        // Skip injection if netfox is not enabled
+        guard NFX.swiftSharedInstance.isEnabled() else { return classes }
+
+        // Skip injection for NFXProtocol's own internal session config (prevents recursion)
+        if objc_getAssociatedObject(self, &nfxExemptConfigKey) != nil {
+            return classes
+        }
+
+        // Inject NFXProtocol if not already present
+        if var classes = classes {
+            if !classes.contains(where: { $0 == NFXProtocol.self }) {
+                classes.insert(NFXProtocol.self, at: 0)
+            }
+            return classes
+        }
+        return [NFXProtocol.self]
+    }
+
+    // Mark a config as exempt from NFXProtocol injection
+    static func markAsNFXInternal(_ config: URLSessionConfiguration) {
+        objc_setAssociatedObject(config, &nfxExemptConfigKey, true, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    }
+
+    // MARK: - Default / Ephemeral getter swizzles (for explicit injection)
+
     private static func swizzleDefault() {
         let aClass: AnyClass = object_getClass(self)!
 
         let origSelector = #selector(getter: URLSessionConfiguration.default)
         let newSelector = #selector(getter: URLSessionConfiguration.default_swizzled)
 
-        let origMethod = class_getClassMethod(aClass, origSelector)!
-        let newMethod = class_getClassMethod(aClass, newSelector)!
-
+        guard let origMethod = class_getClassMethod(aClass, origSelector),
+              let newMethod = class_getClassMethod(aClass, newSelector) else {
+            print("[NFX]: WARNING - Failed to swizzle URLSessionConfiguration.default")
+            return
+        }
         method_exchangeImplementations(origMethod, newMethod)
     }
 
@@ -632,9 +688,11 @@ extension String {
         let origSelector = #selector(getter: URLSessionConfiguration.ephemeral)
         let newSelector = #selector(getter: URLSessionConfiguration.ephemeral_swizzled)
 
-        let origMethod = class_getClassMethod(aClass, origSelector)!
-        let newMethod = class_getClassMethod(aClass, newSelector)!
-
+        guard let origMethod = class_getClassMethod(aClass, origSelector),
+              let newMethod = class_getClassMethod(aClass, newSelector) else {
+            print("[NFX]: WARNING - Failed to swizzle URLSessionConfiguration.ephemeral")
+            return
+        }
         method_exchangeImplementations(origMethod, newMethod)
     }
 

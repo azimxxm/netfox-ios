@@ -10,6 +10,7 @@ import Foundation
 import Cocoa
 #else
 import UIKit
+import SwiftUI
 #endif
 
 private func podPlistVersion() -> String? {
@@ -83,8 +84,10 @@ open class NFX: NSObject {
         }
 
         started = true
-        URLSessionConfiguration.implementNetfox()
+        // Register first — catches URLSession.shared immediately
         register()
+        // Swizzle configuration getters — catches future URLSession instances
+        URLSessionConfiguration.implementNetfox()
         enable()
         fileStorageInit()
         showMessage(Constants.startedMessage.rawValue)
@@ -265,20 +268,13 @@ extension NFX {
     }
 
     fileprivate func showNFX(on rootViewController: UIViewController?) {
-        let navigationController = UINavigationController(rootViewController: NFXListController_iOS())
-        navigationController.navigationBar.isTranslucent = false
-        navigationController.navigationBar.tintColor = UIColor.NFXOrangeColor()
+        // E4: Use NFXRootView which handles iPad split vs iPhone stack
+        let rootView = NFXRootView()
+        let hostingController = UIHostingController(rootView: rootView)
+        hostingController.view.tintColor = UIColor.NFXOrangeColor()
 
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor.NFXBackgroundColor()
-        appearance.titleTextAttributes = [.foregroundColor: UIColor.NFXPrimaryTextColor()]
-
-        navigationController.navigationBar.standardAppearance = appearance
-        navigationController.navigationBar.scrollEdgeAppearance = appearance
-        if #available(iOS 15.0, *) {
-            navigationController.navigationBar.compactScrollEdgeAppearance = appearance
-        }
+        let navigationController = UINavigationController(rootViewController: hostingController)
+        navigationController.setNavigationBarHidden(true, animated: false)
         navigationController.presentationController?.delegate = self
 
         rootViewController?.present(navigationController, animated: true, completion: nil)
