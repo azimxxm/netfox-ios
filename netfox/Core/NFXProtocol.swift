@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os.log
 
 @objc
 open class NFXProtocol: URLProtocol {
@@ -68,9 +69,45 @@ open class NFXProtocol: URLProtocol {
     override open func startLoading() {
         model.saveRequest(request)
 
+        // C2: Check for mock rule before making the real request
+        if let urlString = request.url?.absoluteString,
+           let mockRule = NFXHTTPModelManager.shared.findMockRule(for: urlString) {
+            serveMockResponse(for: urlString, rule: mockRule)
+            return
+        }
+
         let mutableRequest = (request as NSURLRequest).mutableCopy() as! NSMutableURLRequest
         URLProtocol.setProperty(true, forKey: NFXProtocol.nfxInternalKey, in: mutableRequest)
         session.dataTask(with: mutableRequest as URLRequest).resume()
+    }
+
+    /// C2: Return a mock response instead of making the real network call
+    private func serveMockResponse(for urlString: String, rule: NFXMockRule) {
+        let bodyData = rule.responseBody.data(using: .utf8) ?? Data()
+
+        // Build mock HTTP headers
+        var headers = rule.responseHeaders
+        headers["Content-Length"] = "\(bodyData.count)"
+
+        guard let url = request.url,
+              let mockResponse = HTTPURLResponse(
+                  url: url,
+                  statusCode: rule.statusCode,
+                  httpVersion: "HTTP/1.1",
+                  headerFields: headers
+              ) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+
+        // Deliver mock response to the client
+        client?.urlProtocol(self, didReceive: mockResponse, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: bodyData)
+        client?.urlProtocolDidFinishLoading(self)
+
+        // Save the mock response to the model for display in the list
+        model.saveResponse(mockResponse, data: bodyData)
+        NFXHTTPModelManager.shared.add(model)
     }
 
     override open func stopLoading() {
@@ -122,7 +159,40 @@ extension NFXProtocol: URLSessionDataDelegate {
             model.saveResponse(response, data: data)
         }
 
+        // D4: Console logging
+        NFXProtocol.logToConsoleIfNeeded(model: model)
+
         NFXHTTPModelManager.shared.add(model)
+    }
+
+    // MARK: - D4: Console Logging
+
+    private static let nfxLogger = Logger(subsystem: "netfox", category: "network")
+
+    private static func logToConsoleIfNeeded(model: NFXHTTPModel) {
+        guard NFXHTTPModelManager.shared.isConsoleLoggingEnabled else { return }
+        let method = model.requestMethod ?? "?"
+        let status = model.responseStatus ?? 0
+        let url = model.requestURL ?? "?"
+        let duration: String
+        if let interval = model.timeInterval {
+            duration = String(format: "%.0fms", interval * 1000)
+        } else {
+            duration = "?ms"
+        }
+
+        let message = "[NFX] \(method) \(status) \(url) (\(duration))"
+
+        switch status {
+        case 200..<300:
+            nfxLogger.info("\(message, privacy: .public)")
+        case 400..<500:
+            nfxLogger.warning("\(message, privacy: .public)")
+        case 500..<600:
+            nfxLogger.error("\(message, privacy: .public)")
+        default:
+            nfxLogger.info("\(message, privacy: .public)")
+        }
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
@@ -141,6 +211,16 @@ extension NFXProtocol: URLSessionDataDelegate {
     }
 
     public func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+
+        // D6: Capture TLS certificate info before forwarding the challenge
+        #if os(iOS)
+        if NFXHTTPModelManager.shared.isCertInfoEnabled,
+           challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let serverTrust = challenge.protectionSpace.serverTrust {
+            model.certificateInfo = NFXCertificateInfo(from: serverTrust)
+        }
+        #endif
+
         let wrappedChallenge = URLAuthenticationChallenge(authenticationChallenge: challenge, sender: NFXAuthenticationChallengeSender(handler: completionHandler))
         client?.urlProtocol(self, didReceive: wrappedChallenge)
     }

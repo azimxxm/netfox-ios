@@ -13,6 +13,7 @@ import SwiftUI
 
 struct NFXRequestDetailView: View {
     let model: NFXHTTPModel
+    @ObservedObject private var manager = NFXHTTPModelManager.shared
 
     @State private var selectedTab = 0
     @State private var showShareSheet = false
@@ -27,6 +28,9 @@ struct NFXRequestDetailView: View {
 
     // B6: Diff
     @State private var showDiffPicker = false
+
+    // C2: Mock editor
+    @State private var showMockEditor = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,6 +94,16 @@ struct NFXRequestDetailView: View {
                     }
                     .disabled(isReplaying)
 
+                    // C2: Mock button (only when mocking is enabled)
+                    if manager.isMockingEnabled {
+                        Divider()
+                        Button {
+                            showMockEditor = true
+                        } label: {
+                            Label("Mock Response", systemImage: "wand.and.stars")
+                        }
+                    }
+
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
@@ -100,6 +114,9 @@ struct NFXRequestDetailView: View {
         }
         .sheet(isPresented: $showDiffPicker) {
             NFXDiffPickerSheet(sourceModel: model)
+        }
+        .sheet(isPresented: $showMockEditor) {
+            NFXMockEditorView(model: model)
         }
         .background(
             NavigationLink(
@@ -128,6 +145,11 @@ struct NFXRequestDetailView: View {
                 // B7: Metrics timeline (if available)
                 if let metrics = model.taskMetrics {
                     NFXMetricsView(metrics: metrics)
+                }
+
+                // D6: Certificate info (if available and enabled)
+                if manager.isCertInfoEnabled, let certInfo = model.certificateInfo {
+                    NFXCertificateView(certInfo: certInfo)
                 }
             }
             .padding()

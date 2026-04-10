@@ -57,6 +57,30 @@ struct NFXSettingsView: View {
                 }
             }
 
+            // Feature toggles
+            Section(header: Text("Features")) {
+                Toggle("Group by Host", isOn: $manager.isGroupingEnabled)
+                    .tint(Color(UIColor.NFXOrangeColor()))
+
+                Toggle("Response Mocking", isOn: $manager.isMockingEnabled)
+                    .tint(Color(UIColor.NFXOrangeColor()))
+
+                Toggle("Console Logging", isOn: $manager.isConsoleLoggingEnabled)
+                    .tint(Color(UIColor.NFXOrangeColor()))
+
+                Toggle("Certificate Info", isOn: $manager.isCertInfoEnabled)
+                    .tint(Color(UIColor.NFXOrangeColor()))
+
+                Toggle("Haptic on Request", isOn: $manager.isHapticEnabled)
+                    .tint(Color(UIColor.NFXOrangeColor()))
+
+                // E4: Only show iPad split toggle on iPad
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    Toggle("iPad Split View", isOn: $manager.isIPadSplitEnabled)
+                        .tint(Color(UIColor.NFXOrangeColor()))
+                }
+            }
+
             // Response type filters
             Section(
                 header: Text("Response Type Filters"),

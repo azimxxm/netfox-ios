@@ -268,10 +268,9 @@ extension NFX {
     }
 
     fileprivate func showNFX(on rootViewController: UIViewController?) {
-        let listView = NFXRequestListView()
-        let hostingController = UIHostingController(
-            rootView: NavigationView { listView }.navigationViewStyle(.stack)
-        )
+        // E4: Use NFXRootView which handles iPad split vs iPhone stack
+        let rootView = NFXRootView()
+        let hostingController = UIHostingController(rootView: rootView)
         hostingController.view.tintColor = UIColor.NFXOrangeColor()
 
         let navigationController = UINavigationController(rootViewController: hostingController)
